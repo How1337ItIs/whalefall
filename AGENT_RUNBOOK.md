@@ -1,9 +1,8 @@
 # Whalefall Agent Runbook
 
 This runbook is for a local AI coding agent or human operator supervising a
-Whalefall-style follow audit. It is vendor-neutral: Codex, Claude Code,
-OpenClaw/Cade, or another local automation agent can do the job. The important
-part is local supervision, read-only hydration, cache merging, and human review.
+Whalefall-style follow audit. It is vendor-neutral: the important parts are
+local supervision, read-only hydration, cache merging, and human review.
 
 Whalefall v0.1 itself is an offline review CLI. The realistic full result comes
 from this supervised workflow around it.
@@ -11,12 +10,13 @@ from this supervised workflow around it.
 ## Non-Negotiables
 
 - Do not run any unfollow executor.
-- Do not add an unfollow command to friend-facing docs.
+- Do not add an unfollow command to user-facing docs.
 - Do not print cookie values, tokens, API keys, `auth_token`, or `ct0`.
 - Do not upload raw archives or activity caches to a SaaS.
 - Do not treat `error`, `no_visible_posts`, protected, private, suspended, or
   not-found rows as inactive candidates.
-- Do not touch another active run unless the current handoff says it is yours.
+- Do not reuse another user's run directory or activity cache unless they
+  explicitly provide it for this audit.
 - Keep batch sizes small and respect cooldowns after rate limits.
 - End with a review package and `unfollows_executed: 0`.
 
@@ -59,9 +59,8 @@ Check:
 
 ## Phase 2: Read-Only Hydration
 
-Hydrate activity in small batches through a local source. The internal Midas
-operator uses a local browser/session loop, but the product requirement is the
-pattern, not a specific tool:
+Hydrate activity in small batches through a local source. The product
+requirement is the pattern, not a specific tool:
 
 1. Read `activity-needed-following.json`.
 2. Visit or query a small batch of profiles using the user's local session.
@@ -140,8 +139,8 @@ whalefall audit `
   --out-dir C:\path\to\whalefall-review
 ```
 
-Do not copy private operator skills, handoffs, live run files, raw archives, or
-activity caches into the public release. The public-safe release skill is:
+Keep machine-specific scripts, handoffs, raw archives, and activity caches out
+of shared packages and bug reports. For agents, use this skill:
 
 ```text
 skills/whalefall-agent-operator/SKILL.md

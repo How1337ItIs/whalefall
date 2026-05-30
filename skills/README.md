@@ -1,13 +1,12 @@
-# Whalefall Public Skills
+# Whalefall Agent Skills
 
-This folder contains public-safe agent skills that can ship with the Whalefall
-release.
+This folder contains agent skills for Whalefall users who want local,
+agent-assisted review.
 
 Included:
 
 - `whalefall-agent-operator/SKILL.md` - vendor-neutral instructions for a local
   AI coding agent or human operator supervising a review-only Whalefall audit.
 
-Do not ship internal account-specific skills, live run handoffs, browser
-credentials, raw archives, activity caches, or private operator logs in this
-folder.
+Keep account-specific handoffs, browser credentials, raw archives, activity
+caches, and operator logs outside this folder.

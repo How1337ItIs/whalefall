@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "whalefall"
 version = "0.1.0"
-description = "Midas Whale friend-share audit tool for inactive X follows"
+description = "Local-first audit tool for stale X follows"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

@@ -2,9 +2,9 @@
 
 > Dead follows sink. Let the living graph breathe.
 
-Whalefall is a local-first Midas Whale tool for reviewing stale X follows. It
-is for people who follow too many accounts, have a noisy feed, or are close to
-X's following limits and want a private way to decide what to prune.
+Whalefall is a local-first audit tool for reviewing stale X follows. It is for
+people who follow too many accounts, have a noisy feed, or are close to X's
+following limits and want a private way to decide what to prune.
 
 The product has two honest layers:
 
@@ -15,9 +15,7 @@ The product has two honest layers:
    operator-supervised automation loop does the slow part: hydrate latest
    visible activity through a local browser/session in batches, compact the
    cache, merge the evidence, regenerate the review package, and enforce safety
-   gates. Codex, Claude Code, OpenClaw/Cade, or another local automation agent
-   can supervise this. Whalefall should not depend on one model, vendor, or
-   hosted service.
+   gates. Whalefall does not depend on one model, vendor, or hosted service.
 
 Whalefall is inspired by the old Untweeps-style idea: find people you follow
 who have not posted in a long time. The difference is that Whalefall is
@@ -31,8 +29,8 @@ Use Whalefall when you want to:
 
 - audit a large X following list without handing your account to a third-party
   cleanup service;
-- protect mutuals, friends, projects, and private accounts from accidental
-  pruning;
+- protect mutuals, trusted people, projects, communities, and private accounts
+  from accidental pruning;
 - generate CSVs you can inspect before manually unfollowing anything;
 - work from your own X archive and local notes instead of paid API access;
 - let a trusted local agent supervise the slow read-only hydration work.
@@ -47,7 +45,7 @@ Do not use Whalefall expecting:
 
 Whalefall v0.1 is a review package generator. Full cheap activity discovery is
 realistic, but it is an agent-assisted local workflow around the review package,
-not a one-command public SaaS.
+not a hosted SaaS or one-click mutation tool.
 
 ## Safety Model
 
@@ -82,8 +80,8 @@ The X archive provides the graph:
 1. Export your X archive.
 2. Use `data/following.js` for accounts you follow.
 3. Use `data/follower.js` when available so mutuals can be protected.
-4. Add a local keep list for friends, projects, collaborators, artists, and
-   accounts you never want suggested.
+4. Add a local keep list for trusted people, projects, collaborators, artists,
+   communities, and accounts you never want suggested.
 
 The archive usually does **not** contain every followee's latest post timestamp.
 That is why standalone archive-only mode mostly produces an
@@ -91,7 +89,7 @@ That is why standalone archive-only mode mostly produces an
 
 The full workflow adds activity evidence:
 
-1. A local AI coding agent or operator reads the handoff/runbook.
+1. A local AI coding agent or operator reads the runbook.
 2. The agent runs a small read-only browser/session batch over the queue.
 3. The batch writes activity records such as `ok`, `error`,
    `no_visible_posts`, `protected`, or `private`.
@@ -188,7 +186,7 @@ Create `keep-handles.txt` with one handle per line:
 ```text
 # one handle per line
 favorite-project
-close-friend
+trusted-contact
 local-venue
 ```
 
@@ -299,22 +297,21 @@ records over errors.
 
 ## Agent-Assisted Full Hydration
 
-Use this when a friend wants the useful result, not just an archive-only queue.
-The product shape is still local-first:
+Use this when you want the useful result, not just an archive-only queue. The
+workflow stays local-first:
 
-- the friend keeps the archive on their machine;
-- the friend stays signed in locally if browser/session hydration is used;
+- the user keeps the archive on their machine;
+- the user stays signed in locally if browser/session hydration is used;
 - a local AI coding agent supervises read-only batches and cache merging;
 - no raw archive is uploaded to a SaaS;
 - no API spend happens by default;
 - no unfollows happen automatically.
 
-Agent examples include Codex, Claude Code, OpenClaw/Cade, or a human operator.
 The requirement is local supervision and readable artifacts, not a specific
-model or vendor.
+agent, model, vendor, or hosted service.
 
-The public release does not ship a browser hydrator in v0.1. The supervised
-operator loop is:
+Whalefall v0.1 does not ship a browser hydrator. The supervised operator loop
+is:
 
 ```powershell
 # Pseudo-command: use a local read-only hydrator or agent script.
@@ -332,28 +329,26 @@ whalefall audit `
   --out-dir C:\path\to\whalefall-review
 ```
 
-Internal maintainers may have repo-specific supervisor scripts and handoffs that
-prove this pattern. Keep those private references out of the public release.
+If you build a custom hydrator, keep machine-specific scripts, run artifacts,
+archives, and caches outside any shared package.
 
 See [AGENT_RUNBOOK.md](AGENT_RUNBOOK.md) for the vendor-neutral operator
 workflow.
 
-## Public Agent Skill
+## Agent Skill
 
-The release includes a public-safe skill for local AI coding agents:
+For agents, use this vendor-neutral skill:
 
 ```text
 skills/whalefall-agent-operator/SKILL.md
 ```
 
-That skill is the one to share with friends or include in a public release. It
-describes the generic Whalefall workflow without private account names, local
-run directories, internal handoffs, or credentials. Do not package internal
-operator skills or live run files with a public release.
+It describes the generic Whalefall workflow without account-specific names,
+local run directories, handoffs, or credentials.
 
-## Friend-Share Workflow
+## Shared Local Workflow
 
-What the friend does:
+What the user does:
 
 1. Downloads their X archive.
 2. Keeps the archive local.
@@ -367,14 +362,14 @@ What the local agent/operator does:
 1. Runs `whalefall audit` in archive-only mode first.
 2. Reads `activity-needed-following.json`.
 3. Hydrates latest visible activity in small read-only batches through the
-   friend's local browser/session or another explicitly chosen local source.
+   user's local browser/session or another explicitly chosen local source.
 4. Handles rate limits by stopping, cooling down, and resuming later.
 5. Compacts and merges activity evidence.
 6. Reruns `whalefall audit` with the merged activity cache.
 7. Checks that `unfollows_executed` is `0` and the approval file is comment-only.
-8. Hands the review artifacts back to the friend.
+8. Hands the review artifacts back to the user.
 
-What the friend reviews:
+What the user reviews:
 
 - `review.md` for the summary and top candidates.
 - `inactive-candidates.csv` for accounts with old real latest-post timestamps.
@@ -485,8 +480,7 @@ Before running:
 
 - Use a local output folder.
 - Keep the raw X archive out of git.
-- Decide whether the friend is comfortable with local browser/session
-  hydration.
+- Decide whether local browser/session hydration is acceptable for this audit.
 - Set a small batch size if using browser/session hydration.
 - Stop on repeated rate limits and cool down.
 
@@ -599,4 +593,4 @@ account, cookie, or token is needed.
 - Static HTML review table.
 - Better large-account and verified-account guards.
 - Optional second-pass verification before any future executor exists.
-- Desktop wrapper after the local review path is proven with close friends.
+- Desktop wrapper after the local review path is proven with early users.

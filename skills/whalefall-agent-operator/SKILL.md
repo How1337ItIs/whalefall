@@ -135,7 +135,7 @@ Explain:
 
 ## Privacy Check Before Finishing
 
-Search the release/output folder for private material before sharing:
+Search the review/output folder for private material before sharing:
 
 ```powershell
 rg -n "auth_token|ct0|cookie|secret|token|api_key|password" C:\path\to\whalefall-review
