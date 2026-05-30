@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+
+# Local social-graph data. Do not commit archives or generated review packages.
+twitter-*.zip
+twitter-archive*/
+whalefall-output/
+whalefall-review/
+activity-cache*.json
+activity-cache*.jsonl
+following.json
+followers.json
+follower.json
+following.js
+follower.js
+keep-handles.txt

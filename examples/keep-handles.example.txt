@@ -1,0 +1,5 @@
+# One protected X handle per line. Lines starting with # are ignored.
+# Handles here are never marked as inactive candidates.
+favorite-project
+close-friend
+local-venue

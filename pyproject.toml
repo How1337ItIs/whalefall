@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whalefall"
+version = "0.1.0"
+description = "Midas Whale friend-share audit tool for inactive X follows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Midas Whale" }
+]
+keywords = ["x", "twitter", "archive", "following", "inactive", "review", "midas-whale"]
+classifiers = [
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/How1337ItIs/whalefall"
+Issues = "https://github.com/How1337ItIs/whalefall/issues"
+
+[project.scripts]
+whalefall = "whalefall.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
