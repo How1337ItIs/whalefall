@@ -1,0 +1,15 @@
+include README.md
+include AGENT_RUNBOOK.md
+include LICENSE
+recursive-include docs *.md
+recursive-include examples *.js *.json *.txt
+recursive-include skills *.md
+global-exclude __pycache__/*
+global-exclude *.py[cod]
+global-exclude .pytest_cache/*
+recursive-exclude whalefall-output *
+recursive-exclude whalefall-review *
+global-exclude twitter-*.zip
+global-exclude activity-cache*.json
+global-exclude activity-cache*.jsonl
+include examples/activity-cache.example.json
