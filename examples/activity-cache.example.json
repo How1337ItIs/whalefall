@@ -1,0 +1,27 @@
+{
+  "activity": [
+    {
+      "username": "active_account",
+      "user_id": "1001",
+      "last_post_at": "2026-05-01T12:00:00Z",
+      "status": "ok"
+    },
+    {
+      "username": "old_account",
+      "user_id": "1002",
+      "last_post_at": "2024-01-01T12:00:00Z",
+      "status": "ok"
+    },
+    {
+      "username": "rate_limited_account",
+      "user_id": "1003",
+      "status": "error",
+      "error": "429"
+    },
+    {
+      "username": "no_visible_posts_account",
+      "user_id": "1004",
+      "status": "no_visible_posts"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ whalefall-output/
 whalefall-review/
 activity-cache*.json
 activity-cache*.jsonl
+!examples/activity-cache.example.json
 following.json
 followers.json
 follower.json
