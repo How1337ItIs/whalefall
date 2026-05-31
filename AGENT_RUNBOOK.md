@@ -4,13 +4,13 @@ This runbook is for a local AI coding agent or human operator supervising a
 Whalefall-style follow audit. It is vendor-neutral: the important parts are
 local supervision, read-only hydration, cache merging, and human review.
 
-Whalefall v0.1 itself is an offline review CLI. The realistic full result comes
-from this supervised workflow around it.
+Whalefall itself is an offline audit CLI plus a local checkbox review UI. The
+realistic full result comes from this supervised workflow around it.
 
 ## Non-Negotiables
 
-- Do not run any unfollow executor.
-- Do not add an unfollow command to user-facing docs.
+- Do not run any unfollow executor unless the user explicitly chooses the final
+  checked set and starts the UI with execution enabled.
 - Do not print cookie values, tokens, API keys, `auth_token`, or `ct0`.
 - Do not upload raw archives or activity caches to a SaaS.
 - Do not treat `error`, `no_visible_posts`, protected, private, suspended, or
@@ -18,7 +18,7 @@ from this supervised workflow around it.
 - Do not reuse another user's run directory or activity cache unless they
   explicitly provide it for this audit.
 - Keep batch sizes small and respect cooldowns after rate limits.
-- End with a review package and `unfollows_executed: 0`.
+- End hydration with a review package and `unfollows_executed: 0`.
 
 ## Inputs
 
@@ -115,13 +115,14 @@ After each hydration batch:
    latest-post timestamps.
 4. Confirm `manual-review.csv` contains ambiguous rows.
 5. Confirm `approved-unfollows.txt` is comment-only.
-6. Hand artifacts to the human reviewer.
+6. Open `whalefall ui` if the user wants checkbox review.
+7. Hand artifacts to the human reviewer.
 
 ## Operator Loop Shape
 
-The public v0.1 package does not ship a browser hydrator. A local agent or
-operator can still supervise the same workflow with a read-only local hydrator
-or custom script:
+The public package does not ship a browser hydrator. A local agent or operator
+can still supervise the same workflow with a read-only local hydrator or custom
+script:
 
 ```powershell
 # Pseudo-command: adapter name is local to the operator's machine.
@@ -162,13 +163,42 @@ Tell them plainly:
 - It is still a review list, not an execution list.
 - `manual-review.csv` is not an inactive list.
 - Protected/private and mutual accounts were intentionally held out.
-- Nothing was unfollowed.
+- Nothing was unfollowed during audit/hydration.
+- `whalefall ui` can save a checkbox selection; execution only works when the
+  UI was launched with a local command template.
+
+## Local UI
+
+Open a dry-run UI:
+
+```powershell
+whalefall ui --review-dir C:\path\to\whalefall-review --open-browser
+```
+
+Open an execution-enabled UI only after the user asks for it and understands
+which local command will run:
+
+```powershell
+whalefall ui `
+  --review-dir C:\path\to\whalefall-review `
+  --enable-execute `
+  --execute-command "twitter-cli unfollow {username}" `
+  --sleep-min 20 `
+  --sleep-max 45 `
+  --open-browser
+```
+
+The UI checks all candidates by default. The human unchecks accounts to keep,
+then clicks once to write the selected file or execute, depending on launch
+mode.
 
 ## Completion Checklist
 
 - `summary.json.ok` is `true`.
 - `summary.json.unfollows_executed` is `0`.
 - `approved-unfollows.txt` contains only comments.
+- UI selection/execution files are separate from the generated approval
+  template.
 - Candidate rows have parseable old latest-post timestamps.
 - Errors and no-visible-post rows are in manual review.
 - Raw archive and browser secrets stayed local.

@@ -1,6 +1,6 @@
 ---
 name: whalefall-agent-operator
-description: Supervise a Whalefall local-first X following audit with offline review, optional read-only local activity hydration, cache merge, and human-review safety gates.
+description: Supervise a Whalefall local-first X following audit with offline review, optional read-only local activity hydration, cache merge, local checkbox UI, and human-review safety gates.
 always: false
 action_class: 1
 relevance_keywords:
@@ -17,13 +17,16 @@ relevance_keywords:
 # Whalefall Agent Operator
 
 Use this skill when a user wants a local Whalefall audit of their X following
-list. This is a review-only workflow. The agent may help prepare evidence and
-artifacts, but it must not unfollow accounts.
+list. The audit/hydration workflow is review-only. The local UI can execute
+unfollows only when the user explicitly asks for execution and provides or
+accepts the local command template.
 
 ## Hard Rules
 
-- Do not execute unfollows.
+- Do not execute unfollows during audit or hydration.
 - Do not add or suggest a hidden mutation step.
+- Only enable UI execution after the user explicitly asks for one-click
+  unfollow and the command template is visible.
 - Do not upload the user's raw X archive, generated graph, activity cache, or
   review files to a remote service.
 - Do not print, save, or transmit browser cookies, tokens, API keys, or session
@@ -33,7 +36,7 @@ artifacts, but it must not unfollow accounts.
   profiles as inactivity.
 - Only classify an account as a candidate when the review package has a real
   latest visible post timestamp older than the chosen threshold.
-- End with human-readable artifacts and `unfollows_executed: 0`.
+- End hydration with human-readable artifacts and `unfollows_executed: 0`.
 
 ## Inputs To Ask For Or Locate
 
@@ -113,7 +116,32 @@ Then verify:
   timestamps.
 - `manual-review.csv` contains ambiguous/error/no-visible-post rows.
 - `protected.csv` contains keep-list, mutual, protected, and private rows.
-- `approved-unfollows.txt` is comment-only and inert.
+- `approved-unfollows.txt` is comment-only.
+
+## Local UI
+
+Dry-run interface:
+
+```powershell
+whalefall ui --review-dir C:\path\to\whalefall-review --open-browser
+```
+
+Execution-enabled interface:
+
+```powershell
+whalefall ui `
+  --review-dir C:\path\to\whalefall-review `
+  --enable-execute `
+  --execute-command "twitter-cli unfollow {username}" `
+  --sleep-min 20 `
+  --sleep-max 45 `
+  --open-browser
+```
+
+The UI checks all candidate rows by default. The human unchecks accounts they
+want to keep, then clicks once. In dry-run mode that click writes
+`whalefall-ui-approved-unfollows.txt`; in execution-enabled mode it runs the
+configured local command for checked candidates only.
 
 ## Human Handoff
 
@@ -128,6 +156,7 @@ Give the user:
 Explain:
 
 - No accounts were unfollowed.
+- UI execution was not enabled unless they explicitly asked for it.
 - `inactive-candidates.csv` is a candidate review list, not an execution list.
 - `manual-review.csv` is not an inactive list.
 - Protected/private, mutual, keep-list, error, and no-visible-post rows were

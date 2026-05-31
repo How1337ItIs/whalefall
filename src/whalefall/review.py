@@ -103,10 +103,10 @@ def _activity_needed_accounts(
 
 def _write_approval_template(path: Path, candidates: list[ScoredAccount]) -> None:
     lines = [
-        "# Whalefall v0.1 approval template",
-        "# Review-only package: no unfollow executor ships in this version.",
+        "# Whalefall approval template",
         "# Every generated candidate below is commented out on purpose.",
-        "# Copy handles elsewhere for manual review. Uncommenting here does nothing in v0.1.",
+        "# The local UI writes a separate selected-handles file when execution is explicitly enabled.",
+        "# Uncommenting this generated template is not required for the UI.",
         "",
     ]
     if not candidates:
@@ -169,9 +169,9 @@ def _write_review_markdown(
     lines.extend(
         [
             "",
-            "## v0.1 Safety",
+            "## Execution Safety",
             "",
-            "`approved-unfollows.txt` is comment-only. This package has no command that unfollows accounts.",
+            "`approved-unfollows.txt` is comment-only by default. Use `whalefall ui` to check or uncheck candidates and write a separate selected-handles file.",
         ]
     )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

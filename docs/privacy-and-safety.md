@@ -1,8 +1,10 @@
 # Privacy And Safety
 
-Whalefall is designed as a local review tool. The v0.1 package has no code path
-that signs in to X, reads browser cookies, sends network requests, or unfollows
-accounts.
+Whalefall is designed as a local review tool. The audit command has no code
+path that signs in to X, reads browser cookies, sends network requests, or
+unfollows accounts. The optional UI binds to `127.0.0.1` by default and only
+executes unfollows when you start it with `--enable-execute` and a local command
+template.
 
 ## Local Files
 
@@ -28,7 +30,7 @@ names, but you should still check `git status` before committing anything.
 Whalefall only writes `inactive-candidates.csv` rows when a real latest visible
 post timestamp exists and is older than the configured threshold.
 
-These cases are not inactive candidates in v0.1:
+These cases are not inactive candidates:
 
 - keep-list handles
 - mutual follows
@@ -41,5 +43,15 @@ These cases are not inactive candidates in v0.1:
 
 ## No Mutation
 
-`approved-unfollows.txt` is comment-only. It is a review aid, not an execution
-input. v0.1 ships no executor command.
+`approved-unfollows.txt` is comment-only. It is a review aid, not the UI's
+execution input. The UI writes `whalefall-ui-approved-unfollows.txt` from the
+current checkbox state.
+
+Execution is opt-in at server start:
+
+```powershell
+whalefall ui --review-dir C:\path\to\review --enable-execute --execute-command "twitter-cli unfollow {username}"
+```
+
+The command template is local to your machine. Do not share it if it reveals
+private paths or account tooling.

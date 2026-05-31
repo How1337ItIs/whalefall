@@ -6,7 +6,8 @@ agent-assisted review.
 Included:
 
 - `whalefall-agent-operator/SKILL.md` - vendor-neutral instructions for a local
-  AI coding agent or human operator supervising a review-only Whalefall audit.
+  AI coding agent or human operator supervising Whalefall audit, hydration, and
+  optional local checkbox UI review.
 - `whalefall-release-maintainer/SKILL.md` - public-safe release/fork maintenance
   with tests, package checks, privacy scans, and Git discipline.
 

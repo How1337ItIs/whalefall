@@ -20,8 +20,9 @@ The product has two honest layers:
 Whalefall is inspired by the old Untweeps-style idea: find people you follow
 who have not posted in a long time. The difference is that Whalefall is
 deliberately boring where safety matters. It reads files on your machine,
-scores conservatively, writes review artifacts, and never unfollows accounts in
-v0.1.
+scores conservatively, writes review artifacts, and can open a local checkbox
+UI where execution is disabled unless you explicitly start it with a local
+unfollow command.
 
 ## What This Is For
 
@@ -32,30 +33,29 @@ Use Whalefall when you want to:
 - protect mutuals, trusted people, projects, communities, and private accounts
   from accidental pruning;
 - generate CSVs you can inspect before manually unfollowing anything;
+- check or uncheck candidates in a local browser UI;
 - work from your own X archive and local notes instead of paid API access;
 - let a trusted local agent supervise the slow read-only hydration work.
 
 Do not use Whalefall expecting:
 
-- one-click bulk unfollowing;
 - a hosted SaaS dashboard;
 - default X API spend;
 - magic inactivity detection from an archive alone;
-- unattended browser automation that mutates your account.
+- unattended account mutation without a local command you supplied.
 
-Whalefall v0.1 is a review package generator. Full cheap activity discovery is
+Whalefall is a review-first package. Full cheap activity discovery is
 realistic, but it is an agent-assisted local workflow around the review package,
-not a hosted SaaS or one-click mutation tool.
+not a hosted SaaS.
 
 ## Safety Model
 
-Standalone v0.1:
+Standalone audit:
 
 - No sign-in.
 - No browser cookies.
 - No paid API requirement.
 - No network calls.
-- No unfollow command.
 - No telemetry.
 - No cloud upload.
 
@@ -68,10 +68,20 @@ Agent-assisted hydration:
 - Treats `error`, `no_visible_posts`, protected, private, and ambiguous rows as
   manual review.
 - Regenerates the review package after each merge.
-- Still executes zero unfollows.
+- Still executes zero unfollows during hydration.
 
-The generated `approved-unfollows.txt` file is comment-only. It is a planning
-aid, not an execution input. v0.1 ships no command that consumes it.
+Interactive review UI:
+
+- Binds to `127.0.0.1` by default.
+- Loads `inactive-candidates.csv`.
+- Checks all candidates by default so you can uncheck accounts you want to keep.
+- Writes `whalefall-ui-approved-unfollows.txt` from the current checkbox state.
+- Executes nothing unless started with `--enable-execute` and a local
+  `--execute-command`.
+- Records attempts in `whalefall-unfollow-ledger.jsonl`.
+
+The generated `approved-unfollows.txt` file remains comment-only. The UI writes
+a separate selected-handles file when execution is enabled.
 
 ## How The Workflow Really Works
 
@@ -310,8 +320,7 @@ workflow stays local-first:
 The requirement is local supervision and readable artifacts, not a specific
 agent, model, vendor, or hosted service.
 
-Whalefall v0.1 does not ship a browser hydrator. The supervised operator loop
-is:
+Whalefall does not ship a browser hydrator. The supervised operator loop is:
 
 ```powershell
 # Pseudo-command: use a local read-only hydrator or agent script.
@@ -355,7 +364,8 @@ What the user does:
 3. Creates or reviews `keep-handles.txt`.
 4. Optionally signs into X in their local browser if they want supervised
    browser/session hydration.
-5. Reviews the generated package before manually acting in X.
+5. Reviews the generated package in CSV, Markdown, or the local UI before
+   acting in X.
 
 What the local agent/operator does:
 
@@ -366,7 +376,8 @@ What the local agent/operator does:
 4. Handles rate limits by stopping, cooling down, and resuming later.
 5. Compacts and merges activity evidence.
 6. Reruns `whalefall audit` with the merged activity cache.
-7. Checks that `unfollows_executed` is `0` and the approval file is comment-only.
+7. Checks that hydration did not execute unfollows and the generated approval
+   template is comment-only.
 8. Hands the review artifacts back to the user.
 
 What the user reviews:
@@ -376,7 +387,8 @@ What the user reviews:
 - `manual-review.csv` for errors, no-visible-posts, and activity-needed rows.
 - `protected.csv` for mutuals, keep-list entries, and protected/private rows.
 - `activity-needed-following.json` if they want another hydration pass.
-- `approved-unfollows.txt` as an inert planning template only.
+- `approved-unfollows.txt` as a comment-only planning template.
+- `whalefall ui` when they want a local checkbox interface.
 
 What never happens automatically:
 
@@ -436,8 +448,9 @@ Accounts protected by keep list, mutual status, or protected/private status.
 
 ### `approved-unfollows.txt`
 
-Comment-only template. In v0.1, this file does not do anything. It exists so
-you can copy candidate handles into a manual workflow later.
+Comment-only template. The interactive UI writes
+`whalefall-ui-approved-unfollows.txt` from your checkbox state instead of
+mutating this generated template.
 
 ### `activity-needed-following.json`
 
@@ -473,6 +486,41 @@ Import-Csv sample-review\inactive-candidates.csv
 Import-Csv sample-review\manual-review.csv
 Import-Csv sample-review\protected.csv
 ```
+
+Open the local UI:
+
+```powershell
+whalefall ui --review-dir sample-review --open-browser
+```
+
+By default the button writes a dry-run approval file. To make the button execute
+real unfollows, start the UI with a local command template. Per-account mode
+runs the command once for each checked handle:
+
+```powershell
+whalefall ui `
+  --review-dir sample-review `
+  --enable-execute `
+  --execute-command "twitter-cli unfollow {username}" `
+  --sleep-min 20 `
+  --sleep-max 45 `
+  --open-browser
+```
+
+Batch mode writes `whalefall-ui-approved-unfollows.txt` and runs one local
+command:
+
+```powershell
+whalefall ui `
+  --review-dir sample-review `
+  --enable-execute `
+  --execute-mode batch `
+  --execute-command "python my-unfollow-runner.py --approved-file {approved_file}" `
+  --open-browser
+```
+
+Placeholders are shell-quoted before the command runs. The UI only accepts
+handles that are present in `inactive-candidates.csv`.
 
 ## Privacy And Safety Checklist
 
@@ -553,7 +601,8 @@ lists because Whalefall cannot reliably see their latest activity.
 
 ### The approval file is all comments
 
-Correct. v0.1 is review-only. The approval file is intentionally inert.
+Correct. The generated approval template is intentionally comment-only. Use
+`whalefall ui` when you want a checkbox-driven selected-handles file.
 
 ### Windows says `whalefall` is not recognized
 

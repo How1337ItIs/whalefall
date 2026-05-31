@@ -7,12 +7,13 @@ from pathlib import Path
 
 from . import __version__
 from .review import run_audit
+from .ui import ReviewUiConfig, serve_review_ui
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="whalefall",
-        description="Whalefall: local-first, review-only X following audit from Midas Whale.",
+        description="Whalefall: local-first X following audit and review UI from Midas Whale.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -26,6 +27,23 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--threshold-days", type=int, default=180, help="Candidate threshold in days; default: 180")
     audit.add_argument("--out-dir", type=Path, help="Directory for review package files")
     audit.set_defaults(func=command_audit)
+
+    ui = sub.add_parser("ui", help="Open a local checkbox review UI for a Whalefall review directory")
+    ui.add_argument("--review-dir", type=Path, required=True, help="Directory containing inactive-candidates.csv")
+    ui.add_argument("--candidates-file", type=Path, help="Candidate CSV; defaults to inactive-candidates.csv in review dir")
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--max-actions", type=int, default=1000)
+    ui.add_argument("--sleep-min", type=float, default=0.0)
+    ui.add_argument("--sleep-max", type=float, default=0.0)
+    ui.add_argument("--enable-execute", action="store_true", help="Enable the Unfollow checked button")
+    ui.add_argument(
+        "--execute-command",
+        help="Local command template. Per-item placeholders: {username}, {id}, {profile_url}. Batch placeholders: {approved_file}, {review_dir}, {count}.",
+    )
+    ui.add_argument("--execute-mode", choices=["per-item", "batch"], default="per-item")
+    ui.add_argument("--open-browser", action="store_true")
+    ui.set_defaults(func=command_ui)
     return parser
 
 
@@ -40,6 +58,27 @@ def command_audit(args: argparse.Namespace) -> int:
         out_dir=args.out_dir,
     )
     print(json.dumps(summary, indent=2, ensure_ascii=False))
+    return 0
+
+
+def command_ui(args: argparse.Namespace) -> int:
+    if args.enable_execute and not args.execute_command:
+        raise ValueError("--enable-execute requires --execute-command")
+    serve_review_ui(
+        ReviewUiConfig(
+            review_dir=args.review_dir,
+            candidate_file=args.candidates_file,
+            host=args.host,
+            port=args.port,
+            max_actions=args.max_actions,
+            sleep_min=args.sleep_min,
+            sleep_max=args.sleep_max,
+            execute_enabled=args.enable_execute,
+            execute_command=args.execute_command or "",
+            execute_mode=args.execute_mode,
+            open_browser=args.open_browser,
+        )
+    )
     return 0
 
 
