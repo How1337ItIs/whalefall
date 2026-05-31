@@ -192,6 +192,16 @@ The UI checks all candidates by default. The human unchecks accounts to keep,
 then clicks once to write the selected file or execute, depending on launch
 mode.
 
+After a click, check `whalefall-ui-status.json` or `/api/status`:
+
+- `pending`: UI accepted the request.
+- `running`: local command is active.
+- `success`: command exited successfully.
+- `failed`: command exited nonzero or crashed.
+
+Use the ledger to distinguish "command succeeded" from per-handle results when
+the chosen local command writes per-handle entries.
+
 ## Completion Checklist
 
 - `summary.json.ok` is `true`.

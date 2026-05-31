@@ -78,6 +78,8 @@ Interactive review UI:
 - Writes `whalefall-ui-approved-unfollows.txt` from the current checkbox state.
 - Executes nothing unless started with `--enable-execute` and a local
   `--execute-command`.
+- Shows explicit `Pending`, `Running`, `Success`, or `Failed` state after you
+  click.
 - Records attempts in `whalefall-unfollow-ledger.jsonl`.
 
 The generated `approved-unfollows.txt` file remains comment-only. The UI writes
@@ -521,6 +523,16 @@ whalefall ui `
 
 Placeholders are shell-quoted before the command runs. The UI only accepts
 handles that are present in `inactive-candidates.csv`.
+
+After you click, the UI writes `whalefall-ui-status.json` and polls
+`/api/status`. You should see one of:
+
+- `Pending`: the click was accepted and a local job was queued.
+- `Running`: the command is still active; attempted/ok/failed counts update
+  from the ledger when the command writes per-handle results.
+- `Success`: the command exited successfully.
+- `Failed`: the command exited nonzero or crashed. Check the visible message,
+  `whalefall-ui-status.json`, and `whalefall-unfollow-ledger.jsonl`.
 
 ## Privacy And Safety Checklist
 

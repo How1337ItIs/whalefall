@@ -55,3 +55,7 @@ whalefall ui --review-dir C:\path\to\review --enable-execute --execute-command "
 
 The command template is local to your machine. Do not share it if it reveals
 private paths or account tooling.
+
+The UI writes `whalefall-ui-status.json` after a click. Treat `success` as "the
+local command exited successfully"; inspect `whalefall-unfollow-ledger.jsonl`
+for per-handle success/failure when your command writes a ledger.

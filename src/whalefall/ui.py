@@ -5,6 +5,7 @@ import json
 import os
 import random
 import subprocess
+import threading
 import time
 import webbrowser
 from dataclasses import dataclass
@@ -119,6 +120,7 @@ class ReviewUiConfig:
     selection_file: Path | None = None
     approval_file: Path | None = None
     ledger_file: Path | None = None
+    status_file: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8765
     title: str = "Whalefall Review"
@@ -142,6 +144,9 @@ class ReviewUiConfig:
     def resolved_ledger_file(self) -> Path:
         return self.ledger_file or (self.review_dir / "whalefall-unfollow-ledger.jsonl")
 
+    def resolved_status_file(self) -> Path:
+        return self.status_file or (self.review_dir / "whalefall-ui-status.json")
+
 
 def load_selection(path: Path, default_usernames: list[str]) -> set[str]:
     if not path.exists():
@@ -161,6 +166,79 @@ def save_selection(path: Path, usernames: list[str]) -> None:
             "selected_usernames": sorted({normalize_handle(item) for item in usernames if normalize_handle(item)}),
         },
     )
+
+
+def parse_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def read_execution_status(config: ReviewUiConfig) -> dict[str, Any] | None:
+    path = config.resolved_status_file()
+    if not path.exists():
+        return None
+    try:
+        payload = read_json(path)
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def write_execution_status(config: ReviewUiConfig, payload: dict[str, Any]) -> dict[str, Any]:
+    payload = {**payload, "updated_at": utc_now(), "status_file": str(config.resolved_status_file())}
+    write_json(config.resolved_status_file(), payload)
+    return payload
+
+
+def is_active_status(status: dict[str, Any] | None) -> bool:
+    return bool(status and status.get("state") in {"pending", "running"})
+
+
+def ledger_summary_for_status(config: ReviewUiConfig, status: dict[str, Any]) -> dict[str, int]:
+    started = parse_utc(str(status.get("started_at") or ""))
+    selected = {normalize_handle(str(item)) for item in status.get("selected_usernames", []) if normalize_handle(str(item))}
+    counts = {"attempted": 0, "ok": 0, "error": 0, "pending": 0}
+    if not started or not selected:
+        return counts
+    ledger = config.resolved_ledger_file()
+    if not ledger.exists():
+        return counts
+    for raw in ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not raw.strip():
+            continue
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("action") != "unfollow":
+            continue
+        username = normalize_handle(str(entry.get("username") or ""))
+        if username not in selected:
+            continue
+        attempted_at = parse_utc(str(entry.get("attempted_at") or ""))
+        if attempted_at and attempted_at < started:
+            continue
+        counts["attempted"] += 1
+        state = str(entry.get("status") or "pending")
+        if state == "ok":
+            counts["ok"] += 1
+        elif state == "error":
+            counts["error"] += 1
+        else:
+            counts["pending"] += 1
+    return counts
+
+
+def enrich_execution_status(config: ReviewUiConfig, status: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not status:
+        return None
+    enriched = dict(status)
+    enriched["ledger_summary"] = ledger_summary_for_status(config, status)
+    return enriched
 
 
 def build_state(config: ReviewUiConfig) -> dict[str, Any]:
@@ -205,9 +283,11 @@ def build_state(config: ReviewUiConfig) -> dict[str, Any]:
         "selection_file": str(config.resolved_selection_file()),
         "approval_file": str(config.resolved_approval_file()),
         "ledger_file": str(config.resolved_ledger_file()),
+        "status_file": str(config.resolved_status_file()),
         "execute_enabled": config.execute_enabled,
         "execute_mode": config.execute_mode,
         "max_actions": config.max_actions,
+        "execution_status": enrich_execution_status(config, read_execution_status(config)),
         "total_candidates": len(candidates),
         "selected_count": sum(1 for row in candidates if row["checked"]),
         "already_unfollowed": len(already_unfollowed),
@@ -291,15 +371,16 @@ def execute_selected(config: ReviewUiConfig, usernames: list[str]) -> dict[str, 
             },
         )
         result = run_command(command, config.review_dir)
-        for row in selected:
-            entry = {
-                "action": "batch_unfollow",
-                "username": row["username"],
+        append_jsonl(
+            config.resolved_ledger_file(),
+            {
+                "action": "ui_batch_command",
                 "attempted_at": utc_now(),
-                "status": "submitted" if result["status"] == "ok" else "error",
+                "status": result["status"],
+                "selected_count": len(selected),
                 "command_exit_code": result["exit_code"],
-            }
-            append_jsonl(config.resolved_ledger_file(), entry)
+            },
+        )
         results.append(result)
     else:
         for index, row in enumerate(selected, 1):
@@ -339,6 +420,89 @@ def execute_selected(config: ReviewUiConfig, usernames: list[str]) -> dict[str, 
         "approval_file": str(config.resolved_approval_file()),
         "ledger_file": str(config.resolved_ledger_file()),
     }
+
+
+def start_execute_job(config: ReviewUiConfig, usernames: list[str]) -> dict[str, Any]:
+    current = read_execution_status(config)
+    if is_active_status(current):
+        return {
+            "ok": False,
+            "error": "an unfollow job is already pending or running",
+            "execution_status": enrich_execution_status(config, current),
+        }
+
+    candidates = read_candidates(config.resolved_candidate_file())
+    already = ledger_successes(config.resolved_ledger_file())
+    selected, blocked = validate_selected(candidates, usernames, already)
+    if config.max_actions > 0:
+        overflow = selected[config.max_actions :]
+        selected = selected[: config.max_actions]
+        blocked.extend({"username": row["username"], "reason": "beyond max actions"} for row in overflow)
+    selected_usernames = [row["username"] for row in selected]
+    save_selection(config.resolved_selection_file(), selected_usernames)
+    write_approval_file(config.resolved_approval_file(), selected_usernames)
+
+    base_status = {
+        "job_id": str(int(time.time() * 1000)),
+        "state": "dry_run" if not config.execute_enabled else "pending",
+        "started_at": utc_now(),
+        "selected_count": len(selected_usernames),
+        "selected_usernames": selected_usernames,
+        "blocked": blocked,
+        "approval_file": str(config.resolved_approval_file()),
+        "ledger_file": str(config.resolved_ledger_file()),
+        "execute_enabled": config.execute_enabled,
+        "execute_mode": config.execute_mode,
+        "message": "dry run wrote selected handles" if not config.execute_enabled else "queued local unfollow command",
+    }
+    write_execution_status(config, base_status)
+
+    if not config.execute_enabled:
+        return {
+            "ok": True,
+            "started": False,
+            "dry_run": True,
+            "would_unfollow": len(selected_usernames),
+            "approval_file": str(config.resolved_approval_file()),
+            "execution_status": enrich_execution_status(config, base_status),
+        }
+
+    def worker() -> None:
+        running = write_execution_status(
+            config,
+            {
+                **base_status,
+                "state": "running",
+                "message": "running local unfollow command",
+            },
+        )
+        try:
+            result = execute_selected(config, selected_usernames)
+            ok = bool(result.get("ok"))
+            write_execution_status(
+                config,
+                {
+                    **running,
+                    "state": "success" if ok else "failed",
+                    "finished_at": utc_now(),
+                    "message": "unfollow command completed" if ok else "unfollow command failed",
+                    "result": result,
+                },
+            )
+        except Exception as exc:
+            write_execution_status(
+                config,
+                {
+                    **running,
+                    "state": "failed",
+                    "finished_at": utc_now(),
+                    "message": "unfollow command crashed",
+                    "error": str(exc),
+                },
+            )
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"ok": True, "started": True, "execution_status": enrich_execution_status(config, base_status)}
 
 
 HTML = r"""<!doctype html>
@@ -608,6 +772,7 @@ HTML = r"""<!doctype html>
   <script>
     let state = null;
     let rows = [];
+    let pollTimer = null;
     const selected = new Set();
 
     function days(row) {
@@ -619,11 +784,38 @@ HTML = r"""<!doctype html>
       document.getElementById('status').textContent = text || '';
     }
 
+    function statusText(status) {
+      if (!status) return '';
+      const summary = status.ledger_summary || {};
+      const pieces = [];
+      if (status.state === 'pending') pieces.push(`Pending: ${status.selected_count || 0} checked handles queued.`);
+      else if (status.state === 'running') pieces.push(`Running: ${summary.attempted || 0}/${status.selected_count || 0} attempted, ${summary.ok || 0} ok, ${summary.error || 0} failed.`);
+      else if (status.state === 'success') pieces.push(`Success: command finished. ${summary.ok || 0} ok, ${summary.error || 0} failed.`);
+      else if (status.state === 'failed') pieces.push(`Failed: ${status.message || 'command failed'}. ${summary.ok || 0} ok, ${summary.error || 0} failed.`);
+      else if (status.state === 'dry_run') pieces.push(`Dry run: ${status.selected_count || 0} checked handles written to approval file.`);
+      else pieces.push(`${status.state || 'Status'}: ${status.message || ''}`);
+      if (status.approval_file) pieces.push(`Approval file: ${status.approval_file}`);
+      if (status.error) pieces.push(`Error: ${status.error}`);
+      return pieces.join('\n');
+    }
+
+    function renderExecutionStatus(status) {
+      const text = statusText(status);
+      if (text) setStatus(text);
+    }
+
+    function activeStatus() {
+      const status = state && state.execution_status;
+      return !!status && (status.state === 'pending' || status.state === 'running');
+    }
+
     function updateCounts() {
+      const active = activeStatus();
       document.getElementById('selected').textContent = selected.size;
       document.getElementById('execute').textContent = state.execute_enabled
         ? `Unfollow checked (${selected.size})`
         : `Preview checked (${selected.size})`;
+      document.getElementById('execute').disabled = active;
     }
 
     function visibleRows() {
@@ -699,6 +891,32 @@ HTML = r"""<!doctype html>
       document.getElementById('twoy').textContent = state.buckets['2_to_3y'] || 0;
       document.getElementById('oney').textContent = state.buckets['1_to_2y'] || 0;
       render();
+      renderExecutionStatus(state.execution_status);
+      if (activeStatus()) startPolling();
+    }
+
+    async function pollStatus() {
+      try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        state.execution_status = data.execution_status;
+        renderExecutionStatus(state.execution_status);
+        if (activeStatus()) {
+          pollTimer = setTimeout(pollStatus, 2500);
+        } else {
+          await load();
+        }
+      } catch (error) {
+        setStatus(`Status error: ${error.message}`);
+      }
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setTimeout(async function tick() {
+        pollTimer = null;
+        await pollStatus();
+      }, 1000);
     }
 
     document.getElementById('search').addEventListener('input', render);
@@ -720,20 +938,21 @@ HTML = r"""<!doctype html>
       setStatus(`Saved ${data.selected_count} checked handles to ${data.selection_file}`);
     });
     document.getElementById('execute').addEventListener('click', async () => {
-      setStatus(state.execute_enabled ? 'Executing selected unfollows...' : 'Writing dry-run approval file...');
+      setStatus(state.execute_enabled ? 'Pending: starting selected unfollows...' : 'Writing dry-run approval file...');
       document.getElementById('execute').disabled = true;
       try {
         const data = await postJson('/api/execute', {usernames: Array.from(selected)});
-        if (data.dry_run) {
-          setStatus(`Dry run: ${data.would_unfollow} selected. Approval file: ${data.approval_file}`);
+        state.execution_status = data.execution_status || null;
+        renderExecutionStatus(state.execution_status);
+        if (state.execution_status && (state.execution_status.state === 'pending' || state.execution_status.state === 'running')) {
+          startPolling();
         } else {
-          setStatus(`Attempted ${data.attempted}. Result ok=${data.ok}. Ledger: ${data.ledger_file}`);
+          await load();
         }
-        await load();
       } catch (error) {
         setStatus(`Error: ${error.message}`);
       } finally {
-        document.getElementById('execute').disabled = false;
+        updateCounts();
       }
     });
 
@@ -769,6 +988,8 @@ def make_handler(config: ReviewUiConfig) -> type[BaseHTTPRequestHandler]:
                     response(self, 200, HTML.encode("utf-8"), "text/html; charset=utf-8")
                 elif path == "/api/state":
                     json_response(self, 200, build_state(config))
+                elif path == "/api/status":
+                    json_response(self, 200, {"ok": True, "execution_status": enrich_execution_status(config, read_execution_status(config))})
                 else:
                     json_response(self, 404, {"ok": False, "error": "not found"})
             except Exception as exc:
@@ -795,7 +1016,8 @@ def make_handler(config: ReviewUiConfig) -> type[BaseHTTPRequestHandler]:
                         },
                     )
                 elif path == "/api/execute":
-                    json_response(self, 200, execute_selected(config, [str(item) for item in usernames]))
+                    result = start_execute_job(config, [str(item) for item in usernames])
+                    json_response(self, 202 if result.get("started") else 200, result)
                 else:
                     json_response(self, 404, {"ok": False, "error": "not found"})
             except Exception as exc:

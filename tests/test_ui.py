@@ -1,8 +1,9 @@
 import json
 import sys
+import time
 from pathlib import Path
 
-from whalefall.ui import ReviewUiConfig, build_state, execute_selected
+from whalefall.ui import ReviewUiConfig, build_state, execute_selected, read_execution_status, start_execute_job
 
 
 def write_candidates(path: Path) -> None:
@@ -74,3 +75,37 @@ def test_ui_per_item_executor_records_successes(tmp_path):
     state = build_state(config)
     assert state["already_unfollowed"] == 2
     assert state["selected_count"] == 0
+
+
+def test_start_execute_job_records_visible_status(tmp_path):
+    review_dir = tmp_path / "review"
+    review_dir.mkdir()
+    write_candidates(review_dir / "inactive-candidates.csv")
+    log_path = review_dir / "executed.txt"
+    executor = review_dir / "executor.py"
+    executor.write_text(
+        "import sys\n"
+        "from pathlib import Path\n"
+        "Path(sys.argv[2]).open('a', encoding='utf-8').write(sys.argv[1] + '\\n')\n",
+        encoding="utf-8",
+    )
+    config = ReviewUiConfig(
+        review_dir=review_dir,
+        execute_enabled=True,
+        execute_command=f"{sys.executable} {executor} {{username}} {log_path}",
+    )
+
+    started = start_execute_job(config, ["inactive"])
+
+    assert started["ok"] is True
+    assert started["started"] is True
+    status = None
+    for _ in range(50):
+        status = read_execution_status(config)
+        if status and status.get("state") in {"success", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert status["state"] == "success"
+    assert status["selected_count"] == 1
+    assert log_path.read_text(encoding="utf-8").strip() == "inactive"
